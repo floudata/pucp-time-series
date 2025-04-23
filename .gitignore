@@ -172,3 +172,10 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+
+## PROPER
+physionet.org
+ecg-arrhythmia-1.0.0
+
+a-large-scale-12-lead-electrocardiogram-database-for-arrhythmia-study-1.0.0*
