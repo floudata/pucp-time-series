@@ -9,16 +9,20 @@ import neurokit2 as nk
 from streamlit_extras.metric_cards import style_metric_cards
 import re
 
+# Files
+file_record = "records.csv"
+file_snomed_ct = "SNOMED-CT.csv"
+path_arrhythmia = "./ecg-arrhythmia-1.0.0"
 
 @st.dialog("filtrar")
 def filtro():
     st.session_state["selecionado"] = None
-    st.write("This is a filter dialog")
-    data = pd.read_csv("records.csv", index_col="NUMBERS", sep=";")
+    st.write("Filtro de dialogo")
+    data = pd.read_csv(file_record, index_col="NUMBERS", sep=";")
     data["SELECT"] = False
 
     with st.form("seleccionar_record"):
-        st.write("Seleccionar Record")
+        st.write("Seleccionar registro(s) ")
         data_edit = st.data_editor(
             data,
             column_config={
@@ -30,8 +34,8 @@ def filtro():
             height=250,
         )
 
+        # Derivaciones
         st.write("Seleccionar la derivación")
-
         leads = ('I', 'II', 'III', 'aVR', 'aVL', 'aVF', 'V1', 'V2', 'V3', 'V4', 'V5', 'V6')
         lead = st.selectbox(
             "¿Cuál es la derivación que quieres visualizar?",
@@ -47,7 +51,7 @@ def filtro():
             data_edit["SELECT"] = False
             data_edit.at[idx, "SELECT"] = True
         elif data_edit["SELECT"].sum() == 0:
-            st.warning("Debes seleccionar un RECORD.")
+            st.warning("Debes seleccionar un registro.")
         
         seleccionado = data_edit[data_edit["SELECT"]]
 
@@ -59,30 +63,27 @@ def filtro():
             st.write("Seleccionaste:")
             st.write(seleccionado)
             
-
             with st.spinner("Descargando..."):
                 seleccionado_name = seleccionado["RECORDS"].iloc[0]
-                db_name = 'ecg-arrhythmia'
-                download_dir = './ecg-arrhythmia-1.0.0'
+                db_name = 'ecg-arrhythmia'            
                 records = [seleccionado_name]
-                record_path = os.path.join(download_dir, f"{seleccionado_name}.hea")
+                record_path = os.path.join(path_arrhythmia, f"{seleccionado_name}.hea")
+                print("record_path" , record_path)
                 if not os.path.exists(path=record_path):
-                    st.info(f"Downloading the specific record from PhysioNet... **{seleccionado_name}**")
-                    wfdb.dl_database(db_name, dl_dir=download_dir, records=records)
-                    st.success("Download complete!")
+                    st.info(f"Descargando un registro especifico PhysioNet... **{seleccionado_name}**")
+                    wfdb.dl_database(db_name, dl_dir=path_arrhythmia, records=records)
+                    st.success("Descarga completa !")
                 else:
-                    st.info("Database already downloaded.")
+                    st.info("La base de datos ha sido descargada.")
                 
                 time.sleep(5)
                 st.rerun()
-            
 
 
 def set_slider():
     with st.sidebar:
-        if st.button("FILTRAR RECORD", type="secondary", icon=":material/tune:", use_container_width=True):
+        if st.button("Filtrar record", type="secondary", icon=":material/tune:", use_container_width=True):
             filtro()
-
 
 def plot_ecg_style(ecg, fs, duration=10, title="Visualización ECG estilo clínico"):
     N = int(fs * duration)
@@ -90,7 +91,6 @@ def plot_ecg_style(ecg, fs, duration=10, title="Visualización ECG estilo clíni
 
     fig, ax = plt.subplots(figsize=(20, 4))
     ax.plot(t[:N], ecg[:N], color='black', linewidth=1)
-
     # Cuadrícula roja
     ax.set_xticks(np.arange(0, duration, 0.04), minor=True)
     ax.set_xticks(np.arange(0, duration, 0.2))
@@ -117,10 +117,12 @@ def view_graphics(download_dir, record_name):
     record_path = os.path.join(download_dir, record_name)
     record = wfdb.rdrecord(record_path)
     signal_array = np.array(record.p_signal)
-    signal = signal_array[:, st.session_state["lead"]]
-    fs = record.fs
 
-    df_snomed = pd.read_csv("SNOMED-CT.csv")
+    # Obtiene una derivacion especifica de sesion
+    signal = signal_array[:, st.session_state["lead"]]
+    # Frecuencia del muestreo
+    fs = record.fs
+    df_snomed = pd.read_csv(file_snomed_ct)
     
     st.markdown(f"## :small_blue_diamond: Detalles del Registro")
     with st.expander("Visualizar las carácteristicas del registro"):
@@ -137,9 +139,10 @@ def view_graphics(download_dir, record_name):
         sex = "" 
         dx = ""
         for i in record.comments:
+            print("comments", i)
             search_age = re.compile(r"Age: (?P<age>\d+)")
             search_sex = re.compile(r"Sex: (?P<sex>\w+)")
-            search_dx = re.compile(r"Dx: (?P<dx>[\d,]+)")
+            search_dx = re.compile(r"Dx: (?P<dx>[\d,]+)") # diagnosticos
 
             if search_age.search(i):
                 age = search_age.search(i).group("age")
@@ -153,7 +156,6 @@ def view_graphics(download_dir, record_name):
         col2.metric(label="Sex", value=sex, border=True)
         
         #style_metric_cards()
-
         st.write("Lista de Diagnósticos")
         dx_dataframe = df_snomed[df_snomed["Snomed_CT"].astype(str).isin(dx)]
         st.dataframe(dx_dataframe,
@@ -171,17 +173,20 @@ def view_graphics(download_dir, record_name):
     st.markdown(f"## :small_blue_diamond: Gráfica del ECG")
     st.pyplot(plot_ecg_style(signal, fs=fs, title="Visualización ECG original"))
 
+    # Limpieza de la señal ECG
     ecg_cleaned = nk.ecg_clean(signal, sampling_rate=fs)
-
     st.pyplot(plot_ecg_style(ecg_cleaned, fs=fs, title="Visualización ECG Limpio"))
 
+    # Identificar tipo R
     _, rpeaks = nk.ecg_peaks(ecg_cleaned, sampling_rate=fs)
+    # Calcula intervalos RR
     rr_intervals = np.diff(rpeaks['ECG_R_Peaks']) / fs
-    heart_rate = 60 / rr_intervals
-
+    # Identifica frecuencia cardica
+    heart_rate = 60/rr_intervals
+    # Promedio frecuencia cardiaca
     hr_calculado = np.mean(heart_rate)
 
-    signal_process, info_process = nk.ecg_process(signal, sampling_rate=fs)
+    signal_process, info_process = nk.ecg_process(signal, sampling_rate=fs) # procesacimiento ECG
     hr_visible = signal_process["ECG_Rate"].mean()
     
     st.divider()
@@ -203,13 +208,10 @@ def view_graphics(download_dir, record_name):
     st.markdown(f"🖼️ **HR figura (neurokit2):** `{hr_visible:.2f} bpm`")
 
 
-
-
-def set_main():
-    download_dir = './ecg-arrhythmia-1.0.0'
+def set_main(): 
     seleccionado = st.session_state["selecionado"]["RECORDS"].iloc[0]
     st.title("Análisis del registro {seleccionado} - Derivación {lead}".format(seleccionado=seleccionado, lead=st.session_state["lead_name"]))
-    view_graphics(download_dir, seleccionado)
+    view_graphics(path_arrhythmia, seleccionado)
 
 
 def set_resumen():
