@@ -6,8 +6,9 @@ import wfdb
 import numpy as np
 import matplotlib.pyplot as plt
 import neurokit2 as nk
-from streamlit_extras.metric_cards import style_metric_cards
 import re
+from PIL import Image
+
 
 # Files
 file_record = "records.csv"
@@ -68,7 +69,7 @@ def filtro():
                 db_name = 'ecg-arrhythmia'            
                 records = [seleccionado_name]
                 record_path = os.path.join(path_arrhythmia, f"{seleccionado_name}.hea")
-                print("record_path" , record_path)
+
                 if not os.path.exists(path=record_path):
                     st.info(f"Descargando un registro especifico PhysioNet... **{seleccionado_name}**")
                     wfdb.dl_database(db_name, dl_dir=path_arrhythmia, records=records)
@@ -139,7 +140,6 @@ def view_graphics(download_dir, record_name):
         sex = "" 
         dx = ""
         for i in record.comments:
-            print("comments", i)
             search_age = re.compile(r"Age: (?P<age>\d+)")
             search_sex = re.compile(r"Sex: (?P<sex>\w+)")
             search_dx = re.compile(r"Dx: (?P<dx>[\d,]+)") # diagnosticos
@@ -199,11 +199,16 @@ def view_graphics(download_dir, record_name):
 
     st.divider()
     st.markdown(f"## :small_blue_diamond: Frecuencia Cardíaca")
+    msg = st.toast('Calculando Frecuencia Cardiaca...', icon=":material/pending:")
+    time.sleep(2)
+    msg.toast("Frecuencia Cardiaca Calculada", icon=":material/favorite:")
     if np.mean(heart_rate) < 60 or np.mean(heart_rate) > 100:
         st.warning(f"⚠️ Frecuencia cardíaca fuera de rango: {hr_calculado:.1f} bpm")
+        msg.toast(f'Frecuencia cardíaca fuera de rango: {hr_calculado:.1f} bpm', icon='⚠️')
     else:
         st.success(f"✅ Frecuencia cardíaca dentro del rango: {hr_calculado:.1f} bpm")
-    
+        msg.toast(f'Frecuencia cardíaca dentro del rango: {hr_calculado:.1f} bpm', icon='✅')
+
     st.markdown(f"📊 **HR calculado (manual):** `{hr_calculado:.2f} bpm`")
     st.markdown(f"🖼️ **HR figura (neurokit2):** `{hr_visible:.2f} bpm`")
 
@@ -215,7 +220,71 @@ def set_main():
 
 
 def set_resumen():
-    st.title("Resumen del Modelo")
+    img = Image.open("imagen.jpg")
+    st.markdown("# 🩺 Bienvenido a la Plataforma de Análisis de Señales ECG")
+    st.image(img, caption="Proceso de adquisición de un ECG estándar de 12 derivaciones, mostrando la colocación torácica de los electrodos y la impresión del trazado.", use_container_width=True)
+    st.markdown(
+        """
+            ## 📚 Sobre el Dataset
+
+            Esta plataforma utiliza el conjunto de datos **“A Large-Scale 12-lead Electrocardiogram Database for Arrhythmia Study”**, publicado en *Scientific Data (Nature)* y disponible públicamente a través de PhysioNet.  
+            Este dataset contiene más de **10,000 registros de pacientes** con señales de ECG de 12 derivaciones, muestreadas a 500 Hz, cada una con una duración de 10 segundos. Incluye diagnósticos detallados de más de 70 tipos de condiciones cardíacas, anotadas por expertos médicos.
+
+            ---
+
+            ## 🌟 ¿Qué encontrarás en esta plataforma?
+
+            ### 1. Visualización de registros ECG
+
+            - **Señal original con ruido**:  
+            La señal cruda tal como fue capturada, incluyendo artefactos reales de adquisición.
+
+            - **Señal limpia**:  
+            La misma señal, pero preprocesada utilizando filtros digitales para mejorar su legibilidad clínica.
+
+            ---
+
+            ### 2. Análisis automático de la señal
+
+            Con ayuda de la librería **[NeuroKit2](https://github.com/neuropsychology/NeuroKit)**, se realiza un análisis automático de la señal:
+
+            - Limpieza digital con `nk.ecg_clean`
+            - Detección de picos R con `nk.ecg_peaks`
+            - Cálculo de intervalos RR
+            - Estimación de la frecuencia cardíaca (bpm)
+            - Identificación de latidos anómalos
+
+            ---
+
+            ## 🔬 Flujo de trabajo
+
+            1. **Selecciona un registro** desde el dataset.
+            2. **Visualiza** la señal cruda y la limpia.
+            3. **Analiza automáticamente** el ritmo cardíaco con NeuroKit2.
+            4. **Observa los resultados** directamente desde el dashboard.
+
+            ---
+
+            ## 🧠 Propósito de la Plataforma
+
+            Brindar una herramienta educativa e interactiva que permita visualizar, explorar y analizar señales ECG reales, fomentando el aprendizaje y la investigación en el área de electrofisiología y ciencia de datos biomédicos.
+
+            ---
+
+            ## 📚 Referencias
+
+            - 📄 *Zheng, J. et al. (2020)*. A 12-lead electrocardiogram database for arrhythmia research covering more than 10,000 patients. Scientific Data, 7, 48. [DOI:10.1038/s41597-020-0386-x](https://www.nature.com/articles/s41597-020-0386-x)
+
+            - 🔗 Dataset: [https://physionet.org/content/ecg-arrhythmia/1.0.0/WFDBRecords/](https://physionet.org/content/ecg-arrhythmia/1.0.0/WFDBRecords/)
+
+            - 🧪 NeuroKit2: [https://github.com/neuropsychology/NeuroKit](https://github.com/neuropsychology/NeuroKit)
+
+            ---
+
+            _Disfruta explorando las señales del corazón ❤️_
+
+        """
+    )
 
 def main():
     if "selecionado" not in st.session_state:
